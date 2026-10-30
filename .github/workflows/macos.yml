@@ -183,6 +183,30 @@ jobs:
       - name: Select the device
         run: ./unixnu defconfig "$DEFCONFIG"
 
+      - name: Fetch private kernel reference
+        if: contains(inputs.steps, 'kernel')
+        env:
+          PRIVATE_INPUTS_DEPLOY_KEY: ${{ secrets.PRIVATE_INPUTS_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$PRIVATE_INPUTS_DEPLOY_KEY"
+          key="$RUNNER_TEMP/private-inputs-key"
+          known_hosts="$RUNNER_TEMP/private-inputs-known-hosts"
+          printf '%s\n' "$PRIVATE_INPUTS_DEPLOY_KEY" > "$key"
+          chmod 600 "$key"
+          ssh-keyscan -p 443 -t ed25519 ssh.github.com > "$known_hosts"
+          export GIT_SSH_COMMAND="ssh -p 443 -i $key -o IdentitiesOnly=yes -o UserKnownHostsFile=$known_hosts -o StrictHostKeyChecking=yes"
+          rm -rf "$RUNNER_TEMP/private-inputs"
+          git clone --depth 1 \
+            ssh://git@ssh.github.com:443/hanyaa380/dipper-private-inputs.git \
+            "$RUNNER_TEMP/private-inputs/repo"
+          unzip -q "$RUNNER_TEMP/private-inputs/repo/fajita-kernel.zip" \
+            -d "$RUNNER_TEMP/private-inputs"
+          candidate="$RUNNER_TEMP/private-inputs/fajita/kernel/kernel.macho"
+          test -f "$candidate"
+          test -f "${candidate%.macho}.json"
+          echo "FAJITA_STORAGE_CANDIDATE=$candidate" >> "$GITHUB_ENV"
+
       - name: Prepare inputs
         if: contains(inputs.steps, 'payload')
         env:
